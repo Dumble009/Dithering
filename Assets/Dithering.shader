@@ -12,7 +12,8 @@ Shader "Hidden/Dithering"
         _Color7 ("Color7", Color) = (1,1,1,1)
         _Color8 ("Color8", Color) = (1,1,1,1)
 
-        _DitheringThreshold ("_DitheringThreshold", Float) = 0.5
+        _DitheringThreshold ("DitheringThreshold", Float) = 0.5
+        _RandomFactor ("RandomFactor", Float) = 5000
     }
     SubShader
     {
@@ -58,6 +59,7 @@ Shader "Hidden/Dithering"
             float4 _Color8;
 
             float _DitheringThreshold;
+            float _RandomFactor;
 
             fixed4 quantize(float4 col){
                 float distances[8] = {
@@ -93,28 +95,22 @@ Shader "Hidden/Dithering"
                 return resultCol;
             }
 
+            float rand(float f){
+                return (frac(sin(f) * _RandomFactor) - 0.5) * 2;
+            }
+
             fixed4 frag (v2f i) : SV_Target
             {
                 fixed4 col = tex2D(_MainTex, i.uv);
                 
-                float2 leftUV = i.uv + (-1 / _ScreenParams.x, 0);
-                float2 leftUpUV = i.uv + (-1 / _ScreenParams.x, -1 / _ScreenParams.y);
-                float2 upUV = i.uv + (0, -1 / _ScreenParams.y);
-                float2 rightUpUV = i.uv + (1 / _ScreenParams.x, -1 / _ScreenParams.y);
+                float randomX = rand(i.uv.x);
+                float randomY = rand(i.uv.y);
+                float random = rand(randomX + randomY + rand(col.r) + rand(col.g) + rand(col.b));
+                if(random < _DitheringThreshold){
+                    return quantize(col);
+                }
 
-                fixed4 leftCol = tex2D(_MainTex, leftUV);
-                fixed4 leftUpCol = tex2D(_MainTex, leftUpUV);
-                fixed4 upCol = tex2D(_MainTex, upUV);
-                fixed4 rightUpCol = tex2D(_MainTex, rightUpUV);
-
-                fixed4 lQuantizeError = quantize(leftCol) - leftCol;
-                fixed4 luQnantizeError = quantize(leftUpCol) - leftUpCol;
-                fixed4 uQuantizeError = quantize(upCol) - upCol;
-                fixed4 ruQuantizeError = quantize(rightUpCol) - rightUpCol;
-
-                col += (lQuantizeError * 7 + luQnantizeError + uQuantizeError * 5 + ruQuantizeError * 3) / 16;
-
-                return quantize(col);
+                return quantize(col + rand(random) / 2.0);
             }
             ENDCG
         }
